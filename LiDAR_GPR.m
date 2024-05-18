@@ -1,9 +1,6 @@
 %% LIDAR -- GPR .m
 clear;close all; clc;
-addpath(genpath('D:\git-repository\SkiPR'))
-addpath 'D:\CRREL_SnowCompaction\CRREL\SnowEx2020\GrandMesa\UAVSAR-ASO-compare';
-addpath 'D:\CRREL_SnowCompaction\CRREL\SnowEx2020\GrandMesa\LIDAR'
-cmap = csvread('D:\git-repository\GreenTrACS_MxRadar\colorMaps\RdYlBu.csv');
+cmap = csvread('./colormaps/RdYlBu.csv');
 cmap = flipud(cmap);
 %% Read LiDAR .tif
 % Load LiDAR as .mat Generated From postProLiDAR
@@ -16,16 +13,18 @@ isWriteLiDARmat = 0;
 isWriteLidarGPRmat = 1;
 % Write GPR Transect Data
 isGPRcsv = 1;
+% Calculate kdTree
+isKDtree = 0;
 % Data Directory 
-dataDir = 'E:\MCS\MCS040623\';
+dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240213/';
 % Write Directory
 writeDir = dataDir;
 if isLoadLiDARmat
     %% Load Ancillary Data Files from LiDAR_GPR.mat
     % Coordinate Data
-    load([dataDir,'LiDAR\','MCS040523-Coords.mat'])
+    load([dataDir,'20240213_MCS-Coords.mat'])
     % LiDAR Data
-    load([dataDir,'LiDAR\','MCS040523-LiDAR.mat'])
+    load([dataDir,'20240213_MCS-LiDAR.mat'])
 
     % Create Georeference
     latlim = [min(Coords.lat(:)),max(Coords.lat(:))];
@@ -34,7 +33,8 @@ if isLoadLiDARmat
     georef = georefpostings(latlim,lonlim,sizeLidar,'RowsStartFrom','west','ColumnsStartFrom','north');
     clear("latlim","lonlim","sizeLidar")
 %     LiDAR.georef = georef;
-
+isCalcDerivatives = ~isfield(LiDAR.A,'RFaspect');
+if isCalcDerivatives
     % Compute Derivatives using Random Forest Gap Filled Layer
     % Snow Depth Derivatives
     [LiDAR.A.RFaspect,LiDAR.A.RFslope,LiDAR.A.RFgradN,LiDAR.A.RFgradE] = gradientm(LiDAR.A.RF,georef);
@@ -88,6 +88,7 @@ if isLoadLiDARmat
     LiDAR.B.RFnorthness = cosd(LiDAR.B.RFaspect).*sind(LiDAR.B.RFslope);
     % Eastness
     LiDAR.B.RFeastness = sind(LiDAR.B.RFaspect).*sind(LiDAR.B.RFslope);
+end
 else
 
 % A Snow Depth
@@ -235,19 +236,27 @@ LiDAR.C.aspect = inpaint_nans(LiDAR.C.aspect,5);
 end
 % Write LiDAR and Coods .mat
 if isWriteLiDARmat
-    save([writeDir,'\LiDAR\','MCS031722-LiDAR.mat'],'LiDAR','-v7.3')
-    save([writeDir,'\LiDAR\','MCS031722-Coords.mat'],'Coords','-v7.3')
+    save([writeDir,'20240315_MCS-LiDAR.mat'],'LiDAR','-v7.3')
+    save([writeDir,'20240315_MCS-Coords.mat'],'Coords','-v7.3')
 end
 %% Read GPR .csv
-filename = 'MCS040623-TWT.csv';
+% filename = 'GPR-TWT.csv';
+filename = '/bsuhome/tatemeehan/git-repo/auxData/MCS2024-TWT.csv';
 % Read GPR data
-GPR = readtable(fullfile(dataDir,'GPR\processed\',filename));
+% GPR = readtable(fullfile(dataDir,filename));
+GPR = readtable(filename);
 gprX = GPR.Easting; gprY = GPR.Northing;
 gprTWT = GPR.TWT; gprZ = GPR.ElevationWGS84;
+% For Standardized Data Set
+tmpdate = '20240213';
+tmpDateTime = datetime(tmpdate,'InputFormat','yyyyMMdd');
+[~,dateIx] = min(abs(GPR.DateTime - tmpDateTime));
+% gprTWT = (GPR.zTWT.*GPR.stdTWT(dateIx))+GPR.meanTWT(dateIx);
+gprTWT = (GPR.zTWT.*GPR.stdTWT)+GPR.meanTWT(dateIx);
+
 
 %% Co-Locate LiDAR and GPR
 % KD-tree Searcher
-isKDtree = 0;
 if isKDtree
 tic
 winsize = mean([Coords.R.CellExtentInWorldX,Coords.R.CellExtentInWorldY]);
@@ -259,12 +268,16 @@ D = D(ix); IDX = IDX(ix);
 kd.D = D; kd.IDX = IDX;kd.ix = ix;kd.winsize = winsize;
 toc
 % Save the Output
-save([dataDir,'LiDAR\','MCS04052023kdtree.mat'],'kd','-v7.3')
+% save([dataDir,'20240315_MCS-kdtree.mat'],'kd','-v7.3')
+save([dataDir,'2024_MCS-kdtree.mat'],'kd','-v7.3')
+
 
 else
 % Load Previous KD-Tree
 % load('MCS03172022kdtree.mat')
-load([dataDir,'LiDAR\','MCS04052023kdtree.mat'])
+% load([dataDir,'20240315_MCS-kdtree.mat'])
+load([dataDir,'20240213_MCS-kdtree.mat'])
+
 end
 
 %% Pair LiDAR and GPR Observations
@@ -298,16 +311,70 @@ lidarGPR.X = GPRx; lidarGPR.Y = GPRy; lidarGPR.Z = GPRz;lidarGPR.TWT = GPRtwt;
 clear ('gprTWT','gprX','gprY','gprZ','GPRtwt','GPRx','GPRy','GPRz','GPRdate','GPRtime','tmpIx','dist','IDX','ix','D','winsize')
 
 %% Calculate LiDAR - GPR Density
-lidarGPR.Depth = zeros(size(kd.ix));
+% Load Bulk Density Data
+isBiasCorrectTWT = 1;
+isInsitu = 1;
+if isBiasCorrectTWT
+if isInsitu 
+insitu = readtable([dataDir,'MCS20240213_SWE.csv']);
+% Find GPR Loctions within radius of Density Obs
+r = 100;
+ix = [];
+for kk = 1:numel(lidarGPR.X)
+dist = sqrt((insitu.UTM_X-lidarGPR.X(kk)).^2+(insitu.UTM_Y-lidarGPR.Y(kk)).^2);
+if min(dist) > r
+    tmpdensity(kk) = nan;
+else
+            % Inverse Distance Weighting
+            p = 1;
+        w = 1./dist.^p; w(isinf(w))= 1;
+        w=w(:);
+    tmpdensity(kk) = sum(w.*insitu.Density_kgm3)./sum(w);
+end
+% [minIx] = find(dist<=r);
+% ix = [ix;minIx];
+end
+ix = find(~isnan(tmpdensity));
+% !!Bias Correction!!
+% 1.
+avgTWT = median(lidarGPR.TWT(ix));
+avgDepth = median(LiDAR.A.RF(kd.ix(ix)));
+calculatedV = mean(DryCrimVRMS(tmpdensity(ix)));
+deltaTWT = (2.*avgDepth./calculatedV) - avgTWT;
+% 2. 
+% calculatedV = (DryCrimVRMS(tmpdensity(ix)));
+% avgTWT = (lidarGPR.TWT(ix));
+% avgDepth = (LiDAR.A.RF(kd.ix(ix)));
+% deltaTWT = median((2.*avgDepth(:)./calculatedV(:)) - avgTWT(:));
+lidarGPR.TWT = lidarGPR.TWT+deltaTWT;
+else
+% Input Average Density
+avgRho = 300;%mean(insitu.Density_kgm3); % Prior Density % 02132024 Avg Density 300
+avgV = DryCrimVRMS(avgRho);
+avgTWT = median(lidarGPR.TWT(ix));
+avgDepth = avgV.*avgTWT./2;
+deltaDepth = median(LiDAR.A.RF(kd.ix(ix))) - avgDepth;
+deltaTWT = 2.*deltaDepth./avgV;
+lidarGPR.TWT = lidarGPR.TWT+deltaTWT;
+end
+end
+% Calculate Density
+isDrySnow = 1;
+if isDrySnow
 % Dry Snow
-% lidarGPR.Density = DryCrim(2.*(LiDAR.A.A(kd.ix)./lidarGPR.TWT)).*1000;
-lidarGPR.Density = DryCrim(2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT)).*1000;
+velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+lidarGPR.Density = DryCrim(velocity).*1000;
+else
 % Wet Snow
-% lidarGPR.Density = WetCrim( 2.*(LiDAR.A.A(kd.ix)./lidarGPR.TWT),0.0025 ).*1000;
+velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+lwc = 0.0025;
+lidarGPR.Density = WetCrim(velocity,lwc ).*1000;
+end
 infIx = find(isinf(lidarGPR.Density));
 lidarGPR.Density(infIx) = quantile(lidarGPR.Density,0.99);
+
 % Raw Data Quantiles 10% and 90% thresholds
-Qdensity = quantile(lidarGPR.Density,[0.125,0.5,0.875]);
+Qdensity = quantile(lidarGPR.Density,[0.25,0.5,0.75]);
 % Outlier Threshold
 % This is happenchance near the IQR
 % IQR Threshold
@@ -317,6 +384,8 @@ threshIx = find(threshHi| threshLo); % For Threshold
 % not used
 notThreshIx = 1:numel(lidarGPR.Density);
 notThreshIx(threshIx) = [];
+% Allocate Co-Located Depths
+lidarGPR.Depth = zeros(size(kd.ix));
 
 %% KDtreesearcher Smooth GPR-Lidar-Density
 % Simple removal of Outliers
@@ -382,12 +451,12 @@ ixUsed = zeros(length(lidarGPR.Density),1);
         GPRout = table(lidarGPR.X,lidarGPR.Y,lidarGPR.TWT,lidarGPR.Depth.*100,lidarGPR.Density,lidarGPR.SWE,lidarGPR.Velocity,lidarGPR.Permittivity);
         GPRout = renamevars(GPRout,["Var1","Var2","Var3","Var4","Var5","Var6","Var7","Var8"], ...
             ["X (WGS84 UTM 11N)","Y (WGS84 UTM 11N)","TWT (ns)","Depth (cm)","Density (kg/m3)","SWE (mm)","Velocity (m/ns)","Permittivity"]);
-        writetable(GPRout,[writeDir,'GPR\','MCS040623-LiDAR-GPR-density.csv'])
+        writetable(GPRout,[writeDir,'20240213_MCS-LiDAR-GPR-density_all2024.csv'])
         clear('GPRout')
     end
     % Export LiDAR_GPR .mat
     if isWriteLidarGPRmat
-        save([writeDir,'GPR\','MCS040623-LiDAR-GPR.mat'],'lidarGPR','-v7.3')
+        save([writeDir,'20240213_MCS-LiDAR-GPR_all2024.mat'],'lidarGPR','-v7.3')
     end
 
     % House Keeping

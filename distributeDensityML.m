@@ -1,19 +1,21 @@
 %% snowMachine - Supervised Machine Learning to Distribute Snow Density 
 clear; close all; clc;
-% addpath 'D:\CRREL_SnowCompaction\CRREL\SnowEx2020\GrandMesa\LIDAR'
-cmap = csvread('E:\MCS\codeRepo\colormaps\RdYlBu.csv');
+cmap = csvread('./colormaps/RdYlBu.csv');
 cmap = flipud(cmap);
+%% Options
+isWriteLiDARmat = 0;
+isWriteGeoTiff = 1;
 %% Load Ancillary Data Files from LiDAR_GPR.mat
-dataDir = 'E:\MCS\MCS040623';
-writeDir = [dataDir,'\GPR'];
+dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240315/';
+writeDir = dataDir;
 % Coordinate Data
-load([dataDir,'\LiDAR\','MCS040523-Coords.mat'])
+load([dataDir,'20240315_MCS-Coords.mat'])
 % LiDAR Data
-load([dataDir,'\LiDAR\','MCS040523-LiDAR.mat'])
+load([dataDir,'20240315_MCS-LiDAR.mat'])
 % LiDAR - GPR data
-load([dataDir,'\GPR\','MCS040623-LiDAR-GPR.mat'])
+load([dataDir,'20240315_MCS-LiDAR-GPR.mat'])
 % kdTree
-load([dataDir,'\LiDAR\','MCS04052023kdtree.mat'])
+load([dataDir,'20240315_MCS-kdtree.mat'])
 %% Extract ML Predictors
 % Random Forest GapFilled Predictor Data
 MV = [ones(length(lidarGPR.Density(:)),1),LiDAR.A.RF(kd.ix),LiDAR.A.RFnorthness(kd.ix),LiDAR.A.RFeastness(kd.ix),LiDAR.A.RFslope(kd.ix),LiDAR.A.RFgradN(kd.ix),LiDAR.A.RFgradE(kd.ix),LiDAR.A.RFaspect(kd.ix),LiDAR.A.RFaspectN(kd.ix),LiDAR.A.RFaspectE(kd.ix),...
@@ -36,6 +38,7 @@ ML.paramNames = {'\rho_{obs}', 'constant',...
     'Zs','northnessZs','eastnessZs','slopeZs','dyZs','dxZs','aspctZs','aspctNZs','aspctEZs',...
     'Zg','northnessZg','eastnessZg','slopeZg','dyZg','dxZg','aspctZg','aspctNZg','aspctEZg',...
     'Hveg','Sveg','NBR'};
+clear MV
 
 % LiDAR Distributor Data
 % Apply the Model to Distribute Density within the Lidar Box
@@ -55,6 +58,8 @@ for kk = 2:size(MV,2)
     end
 end
 ML.distributors = MV;
+clear MV
+% Extract pertainent LiDAR data
 A = LiDAR.A.A;
 % HillShade
 Caspect = LiDAR.C.aspect;
@@ -64,9 +69,11 @@ Ceastness = LiDAR.C.eastness;
 depth = LiDAR.A.RF;
 % Mask
 alph=~LiDAR.mask;
+% out of memory.
 clear LiDAR
 %% Machine Learning Regression Ensemble Modeling
-for ii = 4%1:3
+modelChoice = [1,4];
+for ii = modelChoice %1:3
 % Algortihm
 if ii == 1
     isMLR = 1;
@@ -92,15 +99,22 @@ if ii == 4
     isANN = 0;
     isGPR = 1;
 end
-
+if ii == 4
 nEnsemble = 1;
-p = 0.5;
+else
+    nEnsemble = 5;
+end
+p = 0.75;
 snowDensityDist = zeros(numel(Coords.ixMask),nEnsemble);
 rng(0) % For Reproducibility
+trainIx = datasample(1:numel(kd.ix),round(0.95*numel(kd.ix)),'Replace',false);
+valIx = find(~ismember(1:numel(kd.ix),trainIx));
 for kk = 1:nEnsemble
     tic
     display(num2str(kk))
-ix = datasample(1:numel(kd.ix),round(p*numel(kd.ix)),'Replace',false);
+    ix = datasample(trainIx,round(p*numel(trainIx)),'Replace',false);
+
+% ix = datasample(1:numel(kd.ix),round(p*numel(kd.ix)),'Replace',false);
 % Machine Learning Training Data Set
 trainML = ML.predictors(ix,:);
 [rows, ~] = find(isnan(trainML));
@@ -109,11 +123,11 @@ trainML(rmvIx,:) = [];
 if isANN
     [trainedModel, validationRMSE] = trainMCSsnowdensityANN(trainML);
 elseif isRF
-%     [trainedModel, validationRMSE] = trainMCSsnowdensityRF(trainML);
-    [trainedModel, validationRMSE] = trainMCSsnowdensityRF1025(trainML);
+    [trainedModel, validationRMSE] = trainMCSsnowdensityRF(trainML);
+    % [trainedModel, validationRMSE] = trainMCSsnowdensityRF1025(trainML);
 elseif isMLR
-    [trainedModel, validationRMSE] = trainMCSsnowdensityMLR(trainML);
-%     [trainedModel, validationRMSE] = trainMCSsnowdensityMLRiPCA(trainML);
+    % [trainedModel, validationRMSE] = trainMCSsnowdensityMLR(trainML);
+    [trainedModel, validationRMSE] = trainMCSsnowdensityMLRiPCA(trainML);
 elseif isGPR
     [trainedModel, validationRMSE] = trainMCSsnowdensityGPR(trainML);
 end
@@ -173,13 +187,14 @@ if isMLR
     % imagesc((Coords.X)./1000,(Coords.Y)./1000,(-LiDAR.C.northness-LiDAR.C.eastness)./2,'AlphaData',0.25.*~alph+alph);colormap(bone)
     freezeColors; hold on;
     % MLR Density
-    hI = imagesc((Coords.X)./1000,(Coords.Y)./1000,ML.MLR.Density,'AlphaData',0.625.*alph);
+    hI = imagesc((Coords.X)./1000,(Coords.Y)./1000,ML.MLRi.Density,'AlphaData',0.625.*alph);
     daspect([1,1,1]);set(gca,'YDir','normal');
     colormap(cmap);
-    caxis([quantile(ML.MLR.Density(Coords.ixMask),[0.005,0.995])]);
+    % caxis([quantile(ML.MLRi.Density(Coords.ixMask),[0.005,0.995])]);
+    clim([225 325])
     cb = colorbar;cb.FontSize = 14;
-    cb.Label.String = 'MLRqiPCA Snow Density (kg/m^3)';
-    title(['Mores Creek Summit Average Snow Density: ', dataDir(end-5:end)])
+    cb.Label.String = 'Snow Density (kg/m^3)';
+    title(['Mores Creek Summit: 20240213']);%, dataDir(end-5:end)])
     set(gca,'fontsize',12,'fontweight','bold','fontname','serif');
     ax = ancestor(hI, 'axes');
     ax.XAxis.Exponent = 0;
@@ -188,7 +203,7 @@ if isMLR
     ytickformat('%.1f')
     xlabel('Easting (km)','fontsize',14); ylabel('Northing (km)','fontsize',14);
     % Save Figure
-    saveas(FigMLR, [writeDir,'\MLRsnowDensityNE.png'],'png');
+    saveas(FigMLR, [writeDir,'\MLRsnowDensity.png'],'png');
 elseif isRF
     FigRF = figure('units','normalized','outerposition',[0 0 1 1]);
     % Hillshade
@@ -248,10 +263,11 @@ elseif isRF
     hI = imagesc((Coords.X)./1000,(Coords.Y)./1000,ML.GPR.Density,'AlphaData',0.625.*alph);
     daspect([1,1,1]);set(gca,'YDir','normal');
     colormap(cmap);
-    caxis([quantile(ML.GPR.Density(Coords.ixMask),[0.005,0.995])]);
+    % caxis([quantile(ML.GPR.Density(Coords.ixMask),[0.005,0.995])]);
+    clim([225 325])
     cb = colorbar;cb.FontSize = 14;
-    cb.Label.String = 'GPR Snow Density (kg/m^3)';
-    title(['Mores Creek Summit Average Snow Density: ', dataDir(end-5:end)])
+    cb.Label.String = 'Snow Density (kg/m^3)';
+    title(['Mores Creek Summit: 20240213'])
     set(gca,'fontsize',12,'fontweight','bold','fontname','serif');
     ax = ancestor(hI, 'axes');
     ax.XAxis.Exponent = 0;
@@ -263,23 +279,34 @@ elseif isRF
     saveas(FigGPR, [writeDir,'\GPRsnowDensity.png'],'png');
 end
 end
-keyboard
-%% Write Processed Data!
+
+% Write Processed Data!
 if isWriteLiDARmat
     save([writeDir,'\',outfnA(1:13),'LiDAR.mat'],'LiDAR','-v7.3')
     save([writeDir,'\',outfnA(1:13),'Coords.mat'],'Coords','-v7.3')
 end
 if isWriteGeoTiff
     % Need to Somehow Automate EPSG Code Lookup..
-    epsgCode = 32611;
-    geotiffwrite([writeDir,'\',outfnA,'_MLRgapfilled.tif'],LiDAR.A.MLR,Coords.R,'CoordRefSysCode',epsgCode);
-    geotiffwrite([writeDir,'\',outfnB,'_MLRgapfilled.tif'],LiDAR.B.MLR,Coords.R,'CoordRefSysCode',epsgCode);
-    geotiffwrite([writeDir,'\',outfnA,'_RFgapfilled.tif'],LiDAR.A.RF,Coords.R,'CoordRefSysCode',epsgCode);
-    geotiffwrite([writeDir,'\',outfnB,'_RFgapfilled.tif'],LiDAR.B.RF,Coords.R,'CoordRefSysCode',epsgCode);
-    geotiffwrite([writeDir,'\',outfnA,'_ANNgapfilled.tif'],LiDAR.A.ANN,Coords.R,'CoordRefSysCode',epsgCode);
-    geotiffwrite([writeDir,'\',outfnB,'_ANNgapfilled.tif'],LiDAR.B.ANN,Coords.R,'CoordRefSysCode',epsgCode);
-end
+    auxDir = '/bsuhome/tatemeehan/git-repo/auxData/';
+    tmpTif = [auxDir,'MCS_REFDEM_WGS84.tif'];
+    info = geotiffinfo(tmpTif);
+    epsgCode = info.GeoTIFFCodes.PCS;
+    % epsgCode = 32611; % UTM Zone 11
+    modelIx = find(ismember(1:4,modelChoice));
+    for kk = 1:numel(modelChoice)
+        if modelIx(kk) == 1
+            geotiffwrite([writeDir,'20240315_MCS','_MLRdensity.tif'],ML.MLRi.Density,Coords.R,'CoordRefSysCode',epsgCode);
+        elseif modelIx(kk) == 2
+            geotiffwrite([writeDir,'20240315_MCS','_RFdensity.tif'],ML.RF.Density,Coords.R,'CoordRefSysCode',epsgCode);
+        elseif modelIx(kk) == 3
+            geotiffwrite([writeDir,'20240315_MCS','_ANNdensity.tif'],ML.ANN.Density,Coords.R,'CoordRefSysCode',epsgCode);
+        elseif modelIx(kk) == 4
+            geotiffwrite([writeDir,'20240315_MCS','_GPRdensity.tif'],ML.GPR.Density,Coords.R,'CoordRefSysCode',epsgCode);
 
+        end
+    end
+end
+keyboard
 %% Multivariate Linear Regression
 % Cross Validation at p percent
 p = .1;
@@ -367,7 +394,8 @@ else
 % Get All combinations of predictors
 coms = cell(1,size(ML.MV(:,2:end),2));
 for kk = 1:size(ML.MV(:,2:end),2)
-coms{kk} = combntns(1:size(ML.MV(:,2:end),2),kk);
+% coms{kk} = combntns(1:size(ML.MV(:,2:end),2),kk);
+coms{kk} = nchoosek(1:size(ML.MV(:,2:end),2),kk);
 end
 optOut = [];
 %         % Random Sampling

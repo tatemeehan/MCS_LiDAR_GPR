@@ -1,6 +1,6 @@
 %% Post-Process LiDAR
 clear;close all; clc;
-cmap = csvread('..\codeRepo\colormaps\RdYlBu.csv');
+cmap = csvread('./colormaps/RdYlBu.csv');
 cmap = flipud(cmap);
 %% Processing Steps
 % Write Output as GeoTiff
@@ -8,7 +8,7 @@ isWriteGeoTiff = 1;
 % Write LiDAR as .mat
 isWriteLiDARmat = 1;
 % Data Directory 
-dataDir = 'E:\MCS\MCS031722\LiDAR';
+dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240418/';
 % Write Directory
 writeDir = dataDir;
 %% Load Raster Layers
@@ -57,7 +57,7 @@ B(nanix) = nan;
 clear('RB')
 
 % C Reference DEM
-dataDir2 = 'E:\MCS\MCS040623\LiDAR';
+dataDir2 = '/bsuhome/tatemeehan/git-repo/auxData';
 % filename = '20220317_MCS-refDEM-T8.tif';
 filename = 'MCS_REFDEM_WGS84.tif';
 fullfilename = fullfile(dataDir2,filename);
@@ -70,9 +70,8 @@ nanMask(nanMask ~= 1) = NaN;
 % D Canopy Height
 % filename = '20220317_MCS-canopyheight-T8.tif';
 % filename = 'hanover_reprocess-canopy.tif';
-dataDir3 = 'E:\MCS\Canopy_MCS';
 filename = 'chm_mcs_1m.tif';
-fullfilename = fullfile(dataDir3,filename);
+fullfilename = fullfile(dataDir2,filename);
 [D,RD,~,~,~,~,~,~] = readLidarTif(fullfilename);
 D = mapinterp(D,RD,Xq,Yq);
 D = imresize(D,size(A));
@@ -84,7 +83,7 @@ clear('RD','zedix')
 
 % E Canopy Proximity
 filename = 'proximity_map_mcs_1m.tif';
-fullfilename = fullfile(dataDir3,filename);
+fullfilename = fullfile(dataDir2,filename);
 [E,RE,~,~,~,~,~,~] = readLidarTif(fullfilename);
 E = mapinterp(E,RE,Xq,Yq);
 E = imresize(E,size(A));
@@ -92,7 +91,7 @@ clear('RE')
 
 % F Normalized Burn Ratio
 filename =  'dnbr_mcs_utm_11n.tif';
-fullfilename = fullfile(dataDir3,filename);
+fullfilename = fullfile(dataDir2,filename);
 [F,RF,~,~,~,~,~,~] = readLidarTif(fullfilename);
 % Trim NBR
 [F,RF] = mapcrop(F,RF,RA.XWorldLimits,RA.YWorldLimits);
@@ -104,7 +103,7 @@ F = imresize(F,size(A));
 clear('RF','RA','Xq','Yq','xq','yq')
 
 % NaN Mask
-border = csvread("..\codeRepo\auxData\MCSborder.csv");
+border = csvread([dataDir2,'/MCSborder.csv']);
 mask = isnan(C)+border;
 mask = mask>0;
 clear('border')
