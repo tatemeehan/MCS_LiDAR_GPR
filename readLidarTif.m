@@ -7,9 +7,12 @@ isTilde = detectOutputSuppression(nargout);isOutput = ~isTilde;
 % Extract the Geotiff data
 % https://www.mathworks.com/matlabcentral/answers/517443-how-i-can-view-this-tif-file
 [A,R] = readgeoraster(fullfilename, 'OutputType', 'double');
-info = geotiffinfo(fullfilename);
-% https://www.mathworks.com/help/map/ref/geotiffinfo.html
-% info = geotiffinfoT8(fullfilename);
+try
+    info = geotiffinfo(fullfilename);
+catch
+    % https://www.mathworks.com/help/map/ref/geotiffinfo.html
+    info = geotiffinfoT8(fullfilename);
+end
 % Get X,Y MeshGrid like Matrix
 X = ones(R.RasterSize(1),1)*linspace(R.XWorldLimits(1),R.XWorldLimits(2),R.RasterSize(2));
 Y = linspace(R.YWorldLimits(1),R.YWorldLimits(2),R.RasterSize(1))'*ones(1,R.RasterSize(2));
