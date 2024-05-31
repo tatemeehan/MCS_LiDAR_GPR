@@ -14,17 +14,17 @@ isWriteLidarGPRmat = 1;
 % Write GPR Transect Data
 isGPRcsv = 1;
 % Calculate kdTree
-isKDtree = 0;
+isKDtree = 1;
 % Data Directory 
-dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240213/';
+dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240315/';
 % Write Directory
 writeDir = dataDir;
 if isLoadLiDARmat
     %% Load Ancillary Data Files from LiDAR_GPR.mat
     % Coordinate Data
-    load([dataDir,'20240213_MCS-Coords.mat'])
+    load([dataDir,'20240315_MCS-Coords5m.mat'])
     % LiDAR Data
-    load([dataDir,'20240213_MCS-LiDAR.mat'])
+    load([dataDir,'20240315_MCS-LiDAR5m.mat'])
 
     % Create Georeference
     latlim = [min(Coords.lat(:)),max(Coords.lat(:))];
@@ -33,7 +33,7 @@ if isLoadLiDARmat
     georef = georefpostings(latlim,lonlim,sizeLidar,'RowsStartFrom','west','ColumnsStartFrom','north');
     clear("latlim","lonlim","sizeLidar")
 %     LiDAR.georef = georef;
-isCalcDerivatives = ~isfield(LiDAR.A,'RFaspect');
+isCalcDerivatives = all([~isfield(LiDAR.A,'RFaspect'), ~isfield(LiDAR.A,'northness')]);
 if isCalcDerivatives
     % Compute Derivatives using Random Forest Gap Filled Layer
     % Snow Depth Derivatives
@@ -240,19 +240,19 @@ if isWriteLiDARmat
     save([writeDir,'20240315_MCS-Coords.mat'],'Coords','-v7.3')
 end
 %% Read GPR .csv
-% filename = 'GPR-TWT.csv';
-filename = '/bsuhome/tatemeehan/git-repo/auxData/MCS2024-TWT.csv';
+filename = 'MCS031524-TWT.csv';
+% filename = '/bsuhome/tatemeehan/git-repo/auxData/MCS2024-TWT.csv';
 % Read GPR data
-% GPR = readtable(fullfile(dataDir,filename));
-GPR = readtable(filename);
+GPR = readtable(fullfile(dataDir,filename));
+% GPR = readtable(filename);
 gprX = GPR.Easting; gprY = GPR.Northing;
 gprTWT = GPR.TWT; gprZ = GPR.ElevationWGS84;
-% For Standardized Data Set
-tmpdate = '20240213';
-tmpDateTime = datetime(tmpdate,'InputFormat','yyyyMMdd');
-[~,dateIx] = min(abs(GPR.DateTime - tmpDateTime));
+% % For Standardized Data Set
+% tmpdate = '20240213';
+% tmpDateTime = datetime(tmpdate,'InputFormat','yyyyMMdd');
+% [~,dateIx] = min(abs(GPR.DateTime - tmpDateTime));
 % gprTWT = (GPR.zTWT.*GPR.stdTWT(dateIx))+GPR.meanTWT(dateIx);
-gprTWT = (GPR.zTWT.*GPR.stdTWT)+GPR.meanTWT(dateIx);
+% gprTWT = (GPR.zTWT.*GPR.stdTWT)+GPR.meanTWT(dateIx);
 
 
 %% Co-Locate LiDAR and GPR
@@ -268,16 +268,15 @@ D = D(ix); IDX = IDX(ix);
 kd.D = D; kd.IDX = IDX;kd.ix = ix;kd.winsize = winsize;
 toc
 % Save the Output
-% save([dataDir,'20240315_MCS-kdtree.mat'],'kd','-v7.3')
-save([dataDir,'2024_MCS-kdtree.mat'],'kd','-v7.3')
+save([dataDir,'20240315_MCS-kdtree-5m.mat'],'kd','-v7.3')
+% save([dataDir,'2024_MCS-kdtree.mat'],'kd','-v7.3')
 
 
 else
 % Load Previous KD-Tree
 % load('MCS03172022kdtree.mat')
-% load([dataDir,'20240315_MCS-kdtree.mat'])
-load([dataDir,'20240213_MCS-kdtree.mat'])
-
+load([dataDir,'20240315_MCS-kdtree-5m.mat'])
+% load([dataDir,'20240213_MCS-kdtree.mat'])
 end
 
 %% Pair LiDAR and GPR Observations
@@ -302,8 +301,8 @@ GPRtime = GPRtwt; GPRdate = GPRtwt;
 %         GPRdate(jj) = min(gprDate(tmpIx));
     end
     % Correct GPR TWT for Slope angle
-%     GPRtwt = GPRtwt./cosd(LiDAR.B.slope(kd.ix));
-    GPRtwt = GPRtwt./cosd(LiDAR.B.RFslope(kd.ix));
+    GPRtwt = GPRtwt./cosd(LiDAR.B.slope(kd.ix));
+    % GPRtwt = GPRtwt./cosd(LiDAR.B.RFslope(kd.ix));
 
 % House Keeping
 lidarGPR.kd = kd;
@@ -312,7 +311,7 @@ clear ('gprTWT','gprX','gprY','gprZ','GPRtwt','GPRx','GPRy','GPRz','GPRdate','GP
 
 %% Calculate LiDAR - GPR Density
 % Load Bulk Density Data
-isBiasCorrectTWT = 1;
+isBiasCorrectTWT = 0;
 isInsitu = 1;
 if isBiasCorrectTWT
 if isInsitu 
@@ -362,11 +361,14 @@ end
 isDrySnow = 1;
 if isDrySnow
 % Dry Snow
-velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+% velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+velocity = 2.*(LiDAR.A.A(kd.ix)./lidarGPR.TWT);
 lidarGPR.Density = DryCrim(velocity).*1000;
 else
 % Wet Snow
-velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+% velocity = 2.*(LiDAR.A.RF(kd.ix)./lidarGPR.TWT);
+velocity = 2.*(LiDAR.A.A(kd.ix)./lidarGPR.TWT);
+
 lwc = 0.0025;
 lidarGPR.Density = WetCrim(velocity,lwc ).*1000;
 end
@@ -406,7 +408,8 @@ ixUsed = zeros(length(lidarGPR.Density),1);
         tmpIx = IDXp{jj};tmpIx = tmpIx(:);
         badIx = ismember(tmpIx,threshIx);
         tmpIx = tmpIx(~badIx); dist = dist(~badIx);
-        if length(tmpIx)<5%isempty(tmpIx)
+        % if length(tmpIx)<5%isempty(tmpIx)
+        if isempty(tmpIx)
             lidarGPR.Density(jj) = NaN;
             lidarGPR.TWT(jj) = NaN;
             lidarGPR.Depth(jj) = NaN;
@@ -426,8 +429,8 @@ ixUsed = zeros(length(lidarGPR.Density),1);
         ixUsed(jj) = tmpIx(tmpDensityIx);
         lidarGPR.Density(jj) = tmpLidarGPRdensity(tmpIx(tmpDensityIx));
         lidarGPR.TWT(jj) = lidarGPR.TWT(tmpIx(tmpDensityIx));
-%         lidarGPR.Depth(jj) = LiDAR.A.A(kd.ix(tmpIx(tmpDensityIx)));
-        lidarGPR.Depth(jj) = LiDAR.A.RF(kd.ix(tmpIx(tmpDensityIx)));
+        lidarGPR.Depth(jj) = LiDAR.A.A(kd.ix(tmpIx(tmpDensityIx)));
+        % lidarGPR.Depth(jj) = LiDAR.A.RF(kd.ix(tmpIx(tmpDensityIx)));
         end
     end
     %inpaintnans
@@ -451,12 +454,12 @@ ixUsed = zeros(length(lidarGPR.Density),1);
         GPRout = table(lidarGPR.X,lidarGPR.Y,lidarGPR.TWT,lidarGPR.Depth.*100,lidarGPR.Density,lidarGPR.SWE,lidarGPR.Velocity,lidarGPR.Permittivity);
         GPRout = renamevars(GPRout,["Var1","Var2","Var3","Var4","Var5","Var6","Var7","Var8"], ...
             ["X (WGS84 UTM 11N)","Y (WGS84 UTM 11N)","TWT (ns)","Depth (cm)","Density (kg/m3)","SWE (mm)","Velocity (m/ns)","Permittivity"]);
-        writetable(GPRout,[writeDir,'20240213_MCS-LiDAR-GPR-density_all2024.csv'])
+        writetable(GPRout,[writeDir,'20240315_MCS-LiDAR-GPR-density_5m.csv'])
         clear('GPRout')
     end
     % Export LiDAR_GPR .mat
     if isWriteLidarGPRmat
-        save([writeDir,'20240213_MCS-LiDAR-GPR_all2024.mat'],'lidarGPR','-v7.3')
+        save([writeDir,'20240315_MCS-LiDAR-GPR_5m.mat'],'lidarGPR','-v7.3')
     end
 
     % House Keeping

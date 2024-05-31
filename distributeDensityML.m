@@ -9,27 +9,78 @@ isWriteGeoTiff = 1;
 dataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240315/';
 writeDir = dataDir;
 % Coordinate Data
-load([dataDir,'20240315_MCS-Coords.mat'])
+load([dataDir,'20240315_MCS-Coords5m.mat'])
 % LiDAR Data
-load([dataDir,'20240315_MCS-LiDAR.mat'])
+load([dataDir,'20240315_MCS-LiDAR5m.mat'])
 % LiDAR - GPR data
-load([dataDir,'20240315_MCS-LiDAR-GPR.mat'])
+load([dataDir,'20240315_MCS-LiDAR-GPR_5m.mat'])
 % kdTree
-load([dataDir,'20240315_MCS-kdtree.mat'])
-%% Extract ML Predictors
-% Random Forest GapFilled Predictor Data
-MV = [ones(length(lidarGPR.Density(:)),1),LiDAR.A.RF(kd.ix),LiDAR.A.RFnorthness(kd.ix),LiDAR.A.RFeastness(kd.ix),LiDAR.A.RFslope(kd.ix),LiDAR.A.RFgradN(kd.ix),LiDAR.A.RFgradE(kd.ix),LiDAR.A.RFaspect(kd.ix),LiDAR.A.RFaspectN(kd.ix),LiDAR.A.RFaspectE(kd.ix),...
-    LiDAR.B.RF(kd.ix),LiDAR.B.RFnorthness(kd.ix),LiDAR.B.RFeastness(kd.ix),LiDAR.B.RFslope(kd.ix),LiDAR.B.RFgradN(kd.ix),LiDAR.B.RFgradE(kd.ix),LiDAR.B.RFaspect(kd.ix),LiDAR.B.RFaspectN(kd.ix),LiDAR.B.RFaspectE(kd.ix),...
-    LiDAR.C.C(kd.ix),LiDAR.C.northness(kd.ix),LiDAR.C.eastness(kd.ix),LiDAR.C.slope(kd.ix),LiDAR.C.gradN(kd.ix),LiDAR.C.gradE(kd.ix),LiDAR.C.aspect(kd.ix),LiDAR.C.aspectN(kd.ix),LiDAR.C.aspectE(kd.ix),...
-    LiDAR.D.D(kd.ix),LiDAR.E.E(kd.ix),LiDAR.F.F(kd.ix)];
-% Normalize Predictors 
-% Normalize the Data to the IQR
-for kk = 2:size(MV,2)
-    if kk == 29
-    else
-        MV(:,kk) = (MV(:,kk)-median(MV(:,kk)))./(iqr(MV(:,kk))+eps);
-    end
+load([dataDir,'20240315_MCS-kdtree-5m.mat'])
+%% Extract ML Distributors & Predictors
+
+% LiDAR Distributor Data
+% Apply the Model to Distribute Density within the Lidar Box
+% Spatial Model of Density
+Coords.ix = [1:numel(Coords.Xi)]';
+Coords.ixMask = Coords.ix(~LiDAR.mask);
+% Apply NaN Mask to Boundary Buffer
+% MV = [ones(numel(Coords.ixMask),1),LiDAR.A.RF(Coords.ixMask),LiDAR.A.RFnorthness(Coords.ixMask),LiDAR.A.RFeastness(Coords.ixMask),LiDAR.A.RFslope(Coords.ixMask),LiDAR.A.RFgradN(Coords.ixMask),LiDAR.A.RFgradE(Coords.ixMask),LiDAR.A.RFaspect(Coords.ixMask),LiDAR.A.RFaspectN(Coords.ixMask),LiDAR.A.RFaspectE(Coords.ixMask),...
+%     LiDAR.B.RF(Coords.ixMask),LiDAR.B.RFnorthness(Coords.ixMask),LiDAR.B.RFeastness(Coords.ixMask),LiDAR.B.RFslope(Coords.ixMask),LiDAR.B.RFgradN(Coords.ixMask),LiDAR.B.RFgradE(Coords.ixMask),LiDAR.B.RFaspect(Coords.ixMask),LiDAR.B.RFaspectN(Coords.ixMask),LiDAR.B.RFaspectE(Coords.ixMask),...
+%     LiDAR.C.C(Coords.ixMask),LiDAR.C.northness(Coords.ixMask),LiDAR.C.eastness(Coords.ixMask),LiDAR.C.slope(Coords.ixMask),LiDAR.C.gradN(Coords.ixMask),LiDAR.C.gradE(Coords.ixMask),LiDAR.C.aspect(Coords.ixMask),LiDAR.C.aspectN(Coords.ixMask),LiDAR.C.aspectE(Coords.ixMask),...
+%     LiDAR.D.D(Coords.ixMask),LiDAR.E.E(Coords.ixMask),LiDAR.F.F(Coords.ixMask)];
+
+MV = [LiDAR.A.A(Coords.ixMask),LiDAR.A.northness(Coords.ixMask),LiDAR.A.eastness(Coords.ixMask),LiDAR.A.slope(Coords.ixMask),LiDAR.A.gradN(Coords.ixMask),LiDAR.A.gradE(Coords.ixMask),LiDAR.A.aspectN(Coords.ixMask),LiDAR.A.aspectE(Coords.ixMask),...
+    LiDAR.B.B(Coords.ixMask),LiDAR.B.northness(Coords.ixMask),LiDAR.B.eastness(Coords.ixMask),LiDAR.B.slope(Coords.ixMask),LiDAR.B.gradN(Coords.ixMask),LiDAR.B.gradE(Coords.ixMask),LiDAR.B.aspectN(Coords.ixMask),LiDAR.B.aspectE(Coords.ixMask),...
+    LiDAR.C.C(Coords.ixMask),LiDAR.C.northness(Coords.ixMask),LiDAR.C.eastness(Coords.ixMask),LiDAR.C.slope(Coords.ixMask),LiDAR.C.gradN(Coords.ixMask),LiDAR.C.gradE(Coords.ixMask),LiDAR.C.aspectN(Coords.ixMask),LiDAR.C.aspectE(Coords.ixMask),...
+    LiDAR.D.D(Coords.ixMask),LiDAR.E.E(Coords.ixMask),LiDAR.F.F(Coords.ixMask)];
+
+% Standardize Data
+ixOG = find(~LiDAR.mask);
+p = .001;
+nMC = 1000;
+predictorMean = zeros(nMC,size(MV,2));
+predictorStd = predictorMean;
+% Monte Carlo Simulation for Huge Data
+for kk = 1:nMC
+    ix = datasample(1:numel(ixOG),round(p.*numel(ixOG)),'Replace',false);
+predictorMean(kk,:) = nanmean([MV(ix,:)],1);
+predictorStd(kk,:) = nanstd([MV(ix,:)],[],1);
 end
+predictorMean = mean(predictorMean);
+predictorStd = mean(predictorStd);
+MV = (MV - predictorMean)./predictorStd;
+
+% % Normalize the Data to the IQR
+% for kk = 2:size(MV,2)
+%     if kk == 29 % was 17
+%     else
+%         MV(:,kk) = (MV(:,kk)-median(MV(:,kk)))./(iqr(MV(:,kk))+eps);
+%     end
+% end
+ML.distributors = MV;
+clear MV
+
+% Random Forest GapFilled Predictor Data
+% MV = [ones(length(lidarGPR.Density(:)),1),LiDAR.A.RF(kd.ix),LiDAR.A.RFnorthness(kd.ix),LiDAR.A.RFeastness(kd.ix),LiDAR.A.RFslope(kd.ix),LiDAR.A.RFgradN(kd.ix),LiDAR.A.RFgradE(kd.ix),LiDAR.A.RFaspect(kd.ix),LiDAR.A.RFaspectN(kd.ix),LiDAR.A.RFaspectE(kd.ix),...
+%     LiDAR.B.RF(kd.ix),LiDAR.B.RFnorthness(kd.ix),LiDAR.B.RFeastness(kd.ix),LiDAR.B.RFslope(kd.ix),LiDAR.B.RFgradN(kd.ix),LiDAR.B.RFgradE(kd.ix),LiDAR.B.RFaspect(kd.ix),LiDAR.B.RFaspectN(kd.ix),LiDAR.B.RFaspectE(kd.ix),...
+%     LiDAR.C.C(kd.ix),LiDAR.C.northness(kd.ix),LiDAR.C.eastness(kd.ix),LiDAR.C.slope(kd.ix),LiDAR.C.gradN(kd.ix),LiDAR.C.gradE(kd.ix),LiDAR.C.aspect(kd.ix),LiDAR.C.aspectN(kd.ix),LiDAR.C.aspectE(kd.ix),...
+%     LiDAR.D.D(kd.ix),LiDAR.E.E(kd.ix),LiDAR.F.F(kd.ix)];
+MV = [LiDAR.A.A(kd.ix),LiDAR.A.northness(kd.ix),LiDAR.A.eastness(kd.ix),LiDAR.A.slope(kd.ix),LiDAR.A.gradN(kd.ix),LiDAR.A.gradE(kd.ix),LiDAR.A.aspectN(kd.ix),LiDAR.A.aspectE(kd.ix),...
+    LiDAR.B.B(kd.ix),LiDAR.B.northness(kd.ix),LiDAR.B.eastness(kd.ix),LiDAR.B.slope(kd.ix),LiDAR.B.gradN(kd.ix),LiDAR.B.gradE(kd.ix),LiDAR.B.aspectN(kd.ix),LiDAR.B.aspectE(kd.ix),...
+    LiDAR.C.C(kd.ix),LiDAR.C.northness(kd.ix),LiDAR.C.eastness(kd.ix),LiDAR.C.slope(kd.ix),LiDAR.C.gradN(kd.ix),LiDAR.C.gradE(kd.ix),LiDAR.C.aspectN(kd.ix),LiDAR.C.aspectE(kd.ix),...
+    LiDAR.D.D(kd.ix),LiDAR.E.E(kd.ix),LiDAR.F.F(kd.ix)];
+
+% Standardize Predictors
+MV = (MV - predictorMean)./predictorStd;
+
+% % Normalize Predictors 
+% % Normalize the Data to the IQR
+% for kk = 2:size(MV,2)
+%     if kk == 29
+%     else
+%         MV(:,kk) = (MV(:,kk)-median(MV(:,kk)))./(iqr(MV(:,kk))+eps);
+%     end
+% end
 MV = [lidarGPR.Density,MV];
 % Add to Machine Learning Structure
 ML.predictors = MV;
@@ -40,25 +91,7 @@ ML.paramNames = {'\rho_{obs}', 'constant',...
     'Hveg','Sveg','NBR'};
 clear MV
 
-% LiDAR Distributor Data
-% Apply the Model to Distribute Density within the Lidar Box
-% Spatial Model of Density
-Coords.ix = [1:numel(Coords.Xi)]';
-Coords.ixMask = Coords.ix(~LiDAR.mask);
-% Apply NaN Mask to Boundary Buffer
-MV = [ones(numel(Coords.ixMask),1),LiDAR.A.RF(Coords.ixMask),LiDAR.A.RFnorthness(Coords.ixMask),LiDAR.A.RFeastness(Coords.ixMask),LiDAR.A.RFslope(Coords.ixMask),LiDAR.A.RFgradN(Coords.ixMask),LiDAR.A.RFgradE(Coords.ixMask),LiDAR.A.RFaspect(Coords.ixMask),LiDAR.A.RFaspectN(Coords.ixMask),LiDAR.A.RFaspectE(Coords.ixMask),...
-    LiDAR.B.RF(Coords.ixMask),LiDAR.B.RFnorthness(Coords.ixMask),LiDAR.B.RFeastness(Coords.ixMask),LiDAR.B.RFslope(Coords.ixMask),LiDAR.B.RFgradN(Coords.ixMask),LiDAR.B.RFgradE(Coords.ixMask),LiDAR.B.RFaspect(Coords.ixMask),LiDAR.B.RFaspectN(Coords.ixMask),LiDAR.B.RFaspectE(Coords.ixMask),...
-    LiDAR.C.C(Coords.ixMask),LiDAR.C.northness(Coords.ixMask),LiDAR.C.eastness(Coords.ixMask),LiDAR.C.slope(Coords.ixMask),LiDAR.C.gradN(Coords.ixMask),LiDAR.C.gradE(Coords.ixMask),LiDAR.C.aspect(Coords.ixMask),LiDAR.C.aspectN(Coords.ixMask),LiDAR.C.aspectE(Coords.ixMask),...
-    LiDAR.D.D(Coords.ixMask),LiDAR.E.E(Coords.ixMask),LiDAR.F.F(Coords.ixMask)];
-% Normalize the Data to the IQR
-for kk = 2:size(MV,2)
-    if kk == 29 % was 17
-    else
-        MV(:,kk) = (MV(:,kk)-median(MV(:,kk)))./(iqr(MV(:,kk))+eps);
-    end
-end
-ML.distributors = MV;
-clear MV
+
 % Extract pertainent LiDAR data
 A = LiDAR.A.A;
 % HillShade
@@ -66,7 +99,8 @@ Caspect = LiDAR.C.aspect;
 Cnorthness = LiDAR.C.northness;
 Ceastness = LiDAR.C.eastness;
 % SnowDepth
-depth = LiDAR.A.RF;
+% depth = LiDAR.A.RF;
+depth = LiDAR.A.A;
 % Mask
 alph=~LiDAR.mask;
 % out of memory.
@@ -99,11 +133,11 @@ if ii == 4
     isANN = 0;
     isGPR = 1;
 end
-if ii == 4
-nEnsemble = 1;
-else
-    nEnsemble = 5;
-end
+% if ii == 4
+%     nEnsemble = 5;
+% else
+%     nEnsemble = 5;
+% end
 p = 0.75;
 snowDensityDist = zeros(numel(Coords.ixMask),nEnsemble);
 rng(0) % For Reproducibility
@@ -127,9 +161,9 @@ elseif isRF
     % [trainedModel, validationRMSE] = trainMCSsnowdensityRF1025(trainML);
 elseif isMLR
     % [trainedModel, validationRMSE] = trainMCSsnowdensityMLR(trainML);
-    [trainedModel, validationRMSE] = trainMCSsnowdensityMLRiPCA(trainML);
+    [trainedModel, validationRMSE] = trainMCSsnowdensityMLRiPCA_5m(trainML);
 elseif isGPR
-    [trainedModel, validationRMSE] = trainMCSsnowdensityGPR(trainML);
+    [trainedModel, validationRMSE] = trainMCSsnowdensityGPR_5m(trainML);
 end
 % Predict in Chunks
 nChunks = 1000;
@@ -191,10 +225,10 @@ if isMLR
     daspect([1,1,1]);set(gca,'YDir','normal');
     colormap(cmap);
     % caxis([quantile(ML.MLRi.Density(Coords.ixMask),[0.005,0.995])]);
-    clim([225 325])
+    clim([300 400])
     cb = colorbar;cb.FontSize = 14;
     cb.Label.String = 'Snow Density (kg/m^3)';
-    title(['Mores Creek Summit: 20240213']);%, dataDir(end-5:end)])
+    title(['Mores Creek Summit: 03/15/2024']);%, dataDir(end-5:end)])
     set(gca,'fontsize',12,'fontweight','bold','fontname','serif');
     ax = ancestor(hI, 'axes');
     ax.XAxis.Exponent = 0;
@@ -203,7 +237,7 @@ if isMLR
     ytickformat('%.1f')
     xlabel('Easting (km)','fontsize',14); ylabel('Northing (km)','fontsize',14);
     % Save Figure
-    saveas(FigMLR, [writeDir,'\MLRsnowDensity.png'],'png');
+    saveas(FigMLR, [writeDir,'\MLRsnowDensity_5m.png'],'png');
 elseif isRF
     FigRF = figure('units','normalized','outerposition',[0 0 1 1]);
     % Hillshade
@@ -264,10 +298,10 @@ elseif isRF
     daspect([1,1,1]);set(gca,'YDir','normal');
     colormap(cmap);
     % caxis([quantile(ML.GPR.Density(Coords.ixMask),[0.005,0.995])]);
-    clim([225 325])
+    clim([300 400])
     cb = colorbar;cb.FontSize = 14;
     cb.Label.String = 'Snow Density (kg/m^3)';
-    title(['Mores Creek Summit: 20240213'])
+    title(['Mores Creek Summit: 03/15/2024'])
     set(gca,'fontsize',12,'fontweight','bold','fontname','serif');
     ax = ancestor(hI, 'axes');
     ax.XAxis.Exponent = 0;
@@ -276,7 +310,7 @@ elseif isRF
     ytickformat('%.1f')
     xlabel('Easting (km)','fontsize',14); ylabel('Northing (km)','fontsize',14);
     % Save Figure
-    saveas(FigGPR, [writeDir,'\GPRsnowDensity.png'],'png');
+    saveas(FigGPR, [writeDir,'\GPRsnowDensity_5m.png'],'png');
 end
 end
 
@@ -286,22 +320,23 @@ if isWriteLiDARmat
     save([writeDir,'\',outfnA(1:13),'Coords.mat'],'Coords','-v7.3')
 end
 if isWriteGeoTiff
-    % Need to Somehow Automate EPSG Code Lookup..
-    auxDir = '/bsuhome/tatemeehan/git-repo/auxData/';
-    tmpTif = [auxDir,'MCS_REFDEM_WGS84.tif'];
-    info = geotiffinfo(tmpTif);
-    epsgCode = info.GeoTIFFCodes.PCS;
+    epsgCode = Coords.epsgCode;
+    % % Need to Somehow Automate EPSG Code Lookup..
+    % auxDir = '/bsuhome/tatemeehan/git-repo/auxData/';
+    % tmpTif = [auxDir,'MCS_REFDEM_WGS84.tif'];
+    % info = geotiffinfo(tmpTif);
+    % epsgCode = info.GeoTIFFCodes.PCS;
     % epsgCode = 32611; % UTM Zone 11
     modelIx = find(ismember(1:4,modelChoice));
     for kk = 1:numel(modelChoice)
         if modelIx(kk) == 1
-            geotiffwrite([writeDir,'20240315_MCS','_MLRdensity.tif'],ML.MLRi.Density,Coords.R,'CoordRefSysCode',epsgCode);
+            geotiffwrite([writeDir,'20240315_MCS','_MLRdensity_5m.tif'],ML.MLRi.Density,Coords.R,'CoordRefSysCode',epsgCode);
         elseif modelIx(kk) == 2
-            geotiffwrite([writeDir,'20240315_MCS','_RFdensity.tif'],ML.RF.Density,Coords.R,'CoordRefSysCode',epsgCode);
+            geotiffwrite([writeDir,'20240315_MCS','_RFdensity_5m.tif'],ML.RF.Density,Coords.R,'CoordRefSysCode',epsgCode);
         elseif modelIx(kk) == 3
-            geotiffwrite([writeDir,'20240315_MCS','_ANNdensity.tif'],ML.ANN.Density,Coords.R,'CoordRefSysCode',epsgCode);
+            geotiffwrite([writeDir,'20240315_MCS','_ANNdensity_5m.tif'],ML.ANN.Density,Coords.R,'CoordRefSysCode',epsgCode);
         elseif modelIx(kk) == 4
-            geotiffwrite([writeDir,'20240315_MCS','_GPRdensity.tif'],ML.GPR.Density,Coords.R,'CoordRefSysCode',epsgCode);
+            geotiffwrite([writeDir,'20240315_MCS','_GPRdensity_5m.tif'],ML.GPR.Density,Coords.R,'CoordRefSysCode',epsgCode);
 
         end
     end

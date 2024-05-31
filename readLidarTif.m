@@ -1,4 +1,4 @@
-function [A,R,X,Y,lon,lat,utmX,utmY] = readLidarTif(fullfilename)
+function [A,R,X,Y,lon,lat,utmX,utmY,epsgCode] = readLidarTif(fullfilename)
 
 % Check outPuts
 % https://www.mathworks.com/matlabcentral/fileexchange/79218-detectoutputsuppression
@@ -18,12 +18,13 @@ X = ones(R.RasterSize(1),1)*linspace(R.XWorldLimits(1),R.XWorldLimits(2),R.Raste
 Y = linspace(R.YWorldLimits(1),R.YWorldLimits(2),R.RasterSize(1))'*ones(1,R.RasterSize(2));
 
 % Extract Lat Lon
-if all(isOutput(5:6))
+if all(isOutput(5:6))|isOutput(9)
     [lat,lon] = projinv(R.ProjectedCRS,X,Y);   
     % Convert to UTM
-    if all(isOutput(7:8))
+    if all(isOutput(7:8))|isOutput(9)
         % EPSG Code from info
-        utmprojection = projcrs(info.GeoTIFFCodes.PCS);
+        epsgCode = info.GeoTIFFCodes.PCS;
+        utmprojection = projcrs(epsgCode);
         % EPSG Code for Grand Mesa, CO Zone 12
         % https://georepository.com/crs_32612/WGS-84-UTM-zone-12N.html
 %         utmprojection = projcrs(32612);

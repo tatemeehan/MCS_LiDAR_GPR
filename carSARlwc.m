@@ -2,8 +2,12 @@
 clear; close all; clc
 %% Launch ParPool
 parpool('local',4);
+%% Set Colormap
+cmap = csvread('./colormaps/RdYlBu.csv');
+cmap = flipud(cmap);
 %% Read carSAR Phase and Coherence Data
-dataDir = 'E:\MCS\MCS031924\CarSAR\processed\';
+% dataDir = 'E:\MCS\MCS031924\CarSAR\processed\';
+dataDir = '/bsuhome/tatemeehan/git-repo/auxData/';
 phzFn = '2024_03_19am_2024_03_19pm_utm_HH_int.tif';
 corFn = '2024_03_19am_2024_03_19pm_utm_HH_cor.tif';
 % InSAR Data
@@ -16,14 +20,17 @@ phz = medfilt2(phz,[10,10]);
 cor(cor>1 | cor<0) = NaN;
 cor = medfilt2(cor,[10,10]);
 %% Load Snow Depth & Density
-dataDir = 'E:\MCS\MCS031524\';
+% dataDir = 'E:\MCS\MCS031524\';
+densityDataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240315/';
 bareDataDir = 'E:\MCS\MCS040623\LiDAR\';
 densityFn = '20240315_MCS_GPRdensity.tif';
 depthFn = '20240315_MCS-snowdepth_RFgapfilled.tif';
 bareFn = 'MCS_REFDEM_WGS84.tif';
-[density,R,~,~,lon,lat,utmX,utmY] = readLidarTif([dataDir,densityFn]);
+[density,R,~,~,lon,lat,utmX,utmY] = readLidarTif([densityDataDir,densityFn]);
 [depth,~,~,~,~,~,~,~] = readLidarTif([dataDir,depthFn]);
-[elvis,~,~,~,~,~,~,~] = readLidarTif([bareDataDir,bareFn]);
+% [elvis,~,~,~,~,~,~,~] = readLidarTif([bareDataDir,bareFn]);
+[elvis,~,~,~,~,~,~,~] = readLidarTif([dataDir,bareFn]);
+
 % Calculate Slope Angle
 % Create Georeference
 latlim = [min(lat(:)),max(lat(:))];
@@ -31,6 +38,7 @@ lonlim = [min(lon(:)) max(lon(:))];
 sizeLidar = size(elvis);
 georef = georefpostings(latlim,lonlim,sizeLidar,'RowsStartFrom','west','ColumnsStartFrom','north');
 [~,slope,~,~] = gradientm(elvis,georef);
+slope = medfilt2(slope,[5,5]);
 
 %% Interpolate Phase and Coherence to LiDAR Grid
 % Get Phase and Coherence on EXACT same Grid
@@ -42,15 +50,16 @@ georef = georefpostings(latlim,lonlim,sizeLidar,'RowsStartFrom','west','ColumnsS
 [Xq,Yq] = meshgrid(xq,yq);
 % Yq = flipud(Yq);
 cor = mapinterp(cor,corR,Xq,Yq);
-cor = imresize(cor,size(phz));
+% cor = imresize(cor,size(phz));
 
 % Interpolate Depth and Density and Slope
 density = mapinterp(density,R,Xq,Yq);
-density = imresize(density,size(phz));
+% density = imresize(density,size(phz));
 depth = mapinterp(depth,R,Xq,Yq);
-depth = imresize(depth,size(phz));
+% depth = imresize(depth,size(phz));
 slope = mapinterp(slope,R,Xq,Yq);
-slope = imresize(slope,size(phz));
+% slope = imresize(slope,size(phz));
+elvis = mapinterp(elvis,R,Xq,Yq);
 %% Calculate Phase Change Response
 f = 1.5; % GHz
 c = 0.3; % speedolight
@@ -87,8 +96,6 @@ else
 end
 toc
 
-cmap = csvread('.\colormaps\RdYlBu.csv');
-cmap = flipud(cmap);
 %% Create Figures
 % Phase
 figure();
@@ -114,3 +121,7 @@ ylabel(hc,'\Delta LWC (%)','fontname','serif','fontweight','bold','fontsize',12)
 xlabel('Easting (km)');ylabel('Northing (km)');
 clim([quantile(deltaLWC(deltaLWC>0),[0.05,0.95])])
 set(gca,'YDir','normal','fontname','serif','fontweight','bold','fontsize',12)
+
+figure();
+axesm('MapProjection','utm','Zone','11T')
+surfm(latPhz,lonPhz,phz,elvis)
