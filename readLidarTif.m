@@ -34,11 +34,12 @@ if all(isOutput(5:6))|isOutput(9)
         [utmX,utmY] = projfwd(utmprojection,lat,lon);
         utmY = flipud(utmY);
     else
-        utmX = 0; utmY = 0;
+        utmX = 0; utmY = 0; epsgCode = 0;
     end
 else
     lat = 0; lon = 0;
     utmX = 0; utmY = 0;
+    epsgCode = 0;
 end
 
 end
