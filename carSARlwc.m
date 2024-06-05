@@ -1,7 +1,17 @@
 %% carSAR 
 clear; close all; clc
 %% Launch ParPool
-parpool('local',4);
+p = gcp('nocreate');
+if isempty(p)
+    % There is no parallel pool
+    % poolsize = 0;
+        p = parpool;
+    poolsize = p.NumWorkers;
+else
+    % There is a parallel pool of <p.NumWorkers> workers
+    poolsize = p.NumWorkers;
+end
+% parpool;%('local',32);
 %% Set Colormap
 cmap = csvread('./colormaps/RdYlBu.csv');
 cmap = flipud(cmap);
@@ -22,7 +32,19 @@ cor(cor>1 | cor<0) = NaN;
 cor = medfilt2(cor,[10,10]);
 % Incidence Angle
 [inc,incR,~,~,lonInc,latInc,utmXinc,utmYinc,~] = readLidarTif([dataDir,incFn]);
-
+%% Set Reference Phase
+CR2ll = [43.934680,-115.661784];
+[CR2utmX,CR2utmY] = deg2utm(CR2ll(1),CR2ll(2));
+% dist = sqrt((CR2utmX-utmXphz).^2+(CR2utmY-utmYphz).^2);
+% [~,refIx] = mink(dist,25);
+k = 5;
+[~,refIxY] = mink(abs(utmYphz(:,1)-CR2utmY),k);
+[~,refIxX] = mink(abs(utmXphz(1,:)-CR2utmX),k);
+refPix = phz(refIxY,refIxX);
+refPhz = mean(refPix(:));
+% Set Reference Phase!
+phz = phz-refPhz;
+phz = wrapToPi(phz);
 %% Load Snow Depth & Density
 % dataDir = 'E:\MCS\MCS031524\';
 densityDataDir = '/bsushare/hpmarshall-shared/LiDAR-GPR/20240315/';
@@ -67,53 +89,57 @@ slope = mapinterp(slope,R,Xq,Yq);
 % slope = imresize(slope,size(phz));
 elvis = mapinterp(elvis,R,Xq,Yq);
 %% Calculate Phase Change Response
+% f = 1.5; % GHz
+% c = 0.3; % speedolight
+% lambda = c./f;
+% thetai = 90-slope; % Incidence Angle with Zero Degree Brackets (Approx)
+% deltaPermtmp = ((phz.*lambda)./(4.*pi.*(depth))+cosd(thetai)).^2+sind(thetai).^2;
+% deltaPerm = ((phz.*lambda)./(4.*pi.*(2.*depth))+cosd(inc)).^2+sind(inc).^2;
+% 
+% 
+% lwc = 0:0.0001:.25;
+% amLWC = 0;
+% amPerm = (c./WetCrimVRMS(density,amLWC)).^2;
+% pmPerm = amPerm+deltaPerm;
+% deltaLWC = zeros(size(phz));
+% % Solve for LWC Change
+% tic
+% p = gcp('nocreate');
+% if isempty(p)
+%     % There is no parallel pool
+%     poolsize = 0;
+% else
+%     % There is a parallel pool of <p.NumWorkers> workers
+%     poolsize = p.NumWorkers;
+% end
+% if poolsize == 0
+%     for ii = 1:numel(phz)
+%         calPerm = (c./WetCrimVRMS(density(ii),lwc)).^2;
+%         [~,minIx] = min(abs(calPerm(:)-pmPerm(ii)));
+%         deltaLWC(ii) = lwc(minIx).*100;
+%     end
+% else
+%     parfor (ii = 1:numel(phz),poolsize)
+%         calPerm = (c./WetCrimVRMS(density(ii),lwc)).^2;
+%         [~,minIx] = min(abs(calPerm(:)-pmPerm(ii)));
+%         deltaLWC(ii) = lwc(minIx).*100;
+%     end
+% end
+% toc
+
+%% Take 2
 f = 1.5; % GHz
 c = 0.3; % speedolight
 lambda = c./f;
-thetai = 90-slope; % Incidence Angle with Zero Degree Brackets (Approx)
-deltaPermtmp = ((phz.*lambda)./(4.*pi.*(depth))+cosd(thetai)).^2+sind(thetai).^2;
-deltaPerm = ((phz.*lambda)./(4.*pi.*(2.*depth))+cosd(inc)).^2+sind(inc).^2;
-
-
-lwc = 0:0.0001:.1;
-amLWC = 0;
-amPerm = (c./WetCrimVRMS(density,amLWC)).^2;
-pmPerm = amPerm+deltaPerm;
-deltaLWC = zeros(size(phz));
-% Solve for LWC Change
-tic
-p = gcp('nocreate');
-if isempty(p)
-    % There is no parallel pool
-    poolsize = 0;
-else
-    % There is a parallel pool of <p.NumWorkers> workers
-    poolsize = p.NumWorkers;
-end
-if poolsize == 0
-    for ii = 1:numel(phz)
-        calPerm = (c./WetCrimVRMS(density(ii),lwc)).^2;
-        [~,minIx] = min(abs(calPerm(:)-pmPerm(ii)));
-        deltaLWC(ii) = lwc(minIx).*100;
-    end
-else
-    parfor (ii = 1:numel(phz),poolsize)
-        calPerm = (c./WetCrimVRMS(density(ii),lwc)).^2;
-        [~,minIx] = min(abs(calPerm(:)-pmPerm(ii)));
-        deltaLWC(ii) = lwc(minIx).*100;
-    end
-end
-toc
-
-%% Take 2
-lwc = 0:0.0001:.1;
+lwc = 0.0001:0.0001:.05;
 amLWC = 0;
 amV = WetCrimVRMS(density,amLWC);
 amPerm = (c./amV).^2;
 amindex = sqrt(amPerm);
 theta2am = asind(sind(inc)./amindex);
 pmPermOut = zeros(size(phz));
-
+deltaLWC = zeros(size(phz));
+% error = zeros(numel(phz),numel(lwc));
 % Solve for LWC Change
 tic
 p = gcp('nocreate');
@@ -130,9 +156,16 @@ if poolsize == 0
         pmPerm = (c./pmV).^2;
         pmindex = sqrt(pmPerm);
         theta2pm = asind(sind(inc(ii))./pmindex);
-        deltaL = depth(ii).*(1./sind(theta2pm)-1./sind(theta2am(ii)));
-        deltaphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
-            + deltaL.*(pmV-amV(ii)));
+        deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
+        if all(~isnan(deltaL))
+            keyboard
+        end
+        deltaLphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL./lambda))));
+        deltaCphz = wrapToPi(-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+        deltaphz = deltaLphz+deltaCphz;
+        % deltaphz = 2.*pi./lambda.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
+        %     + deltaL.*(pmV-amV(ii)));
+        error(ii,:) = abs(deltaphz(:)-phz(ii));
         [~,minIx] = min(abs(deltaphz(:)-phz(ii)));
         deltaLWC(ii) = lwc(minIx).*100;
         pmPermOut(ii) = pmPerm(minIx);
@@ -143,10 +176,28 @@ else
         pmPerm = (c./pmV).^2;
         pmindex = sqrt(pmPerm);
         theta2pm = asind(sind(inc(ii))./pmindex);
-        deltaL = depth(ii).*(1./sind(theta2pm)-1./sind(theta2am(ii)));
-        deltaphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
-            + deltaL.*(pmV-amV(ii)));
-        [~,minIx] = min(abs(deltaphz(:)-phz(ii)));
+        % % deltaL = depth(ii).*(1./sind(theta2pm)-1./sind(theta2am(ii)));
+        deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
+        % % deltaLphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL./lambda))));
+        % % deltaphz = 2.*pi./lambda.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
+        % % + deltaL.*(pmV-amV(ii)));
+        % deltaLphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL./lambda))));
+        % deltaLphz = wrapToPi(2.*pi.*(deltaL./lambda));
+        % deltaCphz = wrapToPi(-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+        % % deltaphz = deltaLphz+deltaCphz;
+        % deltaphz = wrapToPi(deltaLphz+deltaCphz);
+        % UnWrapped
+deltaLphz = (2.*pi.*(deltaL./lambda));
+deltaCphz = (-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+deltaphz = deltaLphz+deltaCphz;
+deltaphz = wrapToPi(deltaLphz+deltaCphz);
+        % error(ii,:) = unwrap(abs(deltaphz(:)-phz(ii)));
+        tmperror= abs(unwrap(deltaphz(:)-phz(ii)));
+                % tmperror= abs((deltaphz(:)-phz(ii)));
+
+        % error(ii,:) = tmperror;
+        % [~,minIx] = min(abs(deltaphz(:)-phz(ii)));
+        [~,minIx] = min(tmperror);
         deltaLWC(ii) = lwc(minIx).*100;
         pmPermOut(ii) = pmPerm(minIx);
     end
@@ -178,7 +229,7 @@ imagesc(utmXphz(1,:)./1000,(utmYphz(:,1))./1000,deltaLWC);daspect([1,1,1]);color
 ylabel(hc,'\Delta LWC (%)','fontname','serif','fontweight','bold','fontsize',12)
 xlabel('Easting (km)');ylabel('Northing (km)');
 % clim([quantile(deltaLWC(deltaLWC>0),[0.05,0.95])])
-clim([0 0.5])
+clim([0 .5])
 set(gca,'YDir','normal','fontname','serif','fontweight','bold','fontsize',12)
 title('Mores Creek Summit: 03/19/24')
 % LWC
