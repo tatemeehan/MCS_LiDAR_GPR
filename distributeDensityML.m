@@ -296,18 +296,18 @@ elseif isRF
     % RF Density
     hI = imagesc((Coords.X)./1000,(Coords.Y)./1000,ML.GPR.Density,'AlphaData',0.625.*alph);
     daspect([1,1,1]);set(gca,'YDir','normal');
-    colormap(cmap);
+    colormap(bone);
     % caxis([quantile(ML.GPR.Density(Coords.ixMask),[0.005,0.995])]);
-    clim([300 400])
+    clim([320 360])
     cb = colorbar;cb.FontSize = 14;
     cb.Label.String = 'Snow Density (kg/m^3)';
     title(['Mores Creek Summit: 03/15/2024'])
     set(gca,'fontsize',12,'fontweight','bold','fontname','serif');
     ax = ancestor(hI, 'axes');
     ax.XAxis.Exponent = 0;
-    xtickformat('%.1f')
+%     xtickformat('%.1f')
     ax.YAxis.Exponent = 0;
-    ytickformat('%.1f')
+%     ytickformat('%.1f')
     xlabel('Easting (km)','fontsize',14); ylabel('Northing (km)','fontsize',14);
     % Save Figure
     saveas(FigGPR, [writeDir,'\GPRsnowDensity_5m.png'],'png');
