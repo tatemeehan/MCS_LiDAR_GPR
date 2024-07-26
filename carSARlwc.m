@@ -1,5 +1,5 @@
 %% carSAR 
-clear; close all; clc
+clear; %close all; clc
 %% Launch ParPool
 p = gcp('nocreate');
 if isempty(p)
@@ -156,12 +156,14 @@ if poolsize == 0
         pmPerm = (c./pmV).^2;
         pmindex = sqrt(pmPerm);
         theta2pm = asind(sind(inc(ii))./pmindex);
-        deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
+        % deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
+        deltaL = 2.*depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
         if all(~isnan(deltaL))
             keyboard
         end
         deltaLphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL./lambda))));
-        deltaCphz = wrapToPi(-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+                % deltaCphz = wrapToPi(-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+        deltaCphz = wrapToPi(-2.*pi.*f.*((deltaL+(1./cosd(theta2am(ii)))).*(1./pmV-1./amV(ii))));
         deltaphz = deltaLphz+deltaCphz;
         % deltaphz = 2.*pi./lambda.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
         %     + deltaL.*(pmV-amV(ii)));
@@ -176,8 +178,14 @@ else
         pmPerm = (c./pmV).^2;
         pmindex = sqrt(pmPerm);
         theta2pm = asind(sind(inc(ii))./pmindex);
+        l1 = depth(ii)./cosd(theta2am(ii));
+        l2 = depth(ii)./cosd(theta2pm);
+        deltaL = 2.*(l2-l1);
+        deltaT = 2.*((l2./pmV)-(l1./amV(ii)));
+        % Zach's Correction
+        % deltaL = 2.*depth(ii).*());
         % % deltaL = depth(ii).*(1./sind(theta2pm)-1./sind(theta2am(ii)));
-        deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
+        % deltaL = depth(ii).*(1./cosd(theta2pm)-1./cosd(theta2am(ii)));
         % % deltaLphz = 2.*pi.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL./lambda))));
         % % deltaphz = 2.*pi./lambda.*((sign(deltaL)).*(abs(deltaL./lambda)-abs(floor(deltaL)))...
         % % + deltaL.*(pmV-amV(ii)));
@@ -188,8 +196,13 @@ else
         % deltaphz = wrapToPi(deltaLphz+deltaCphz);
         % UnWrapped
 deltaLphz = (2.*pi.*(deltaL./lambda));
-deltaCphz = (-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
-deltaphz = deltaLphz+deltaCphz;
+% deltaCphz = (-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
+% Zach's Correction (deltaL + L) / deltaV
+% deltaCphz = (-2.*pi.*f.*((deltaL+(depth(ii)./cosd(theta2am(ii)))).*(1./pmV-1./amV(ii))));
+% Tate's Correct Correction
+deltaCphz = -2.*pi.*f.*deltaT;
+
+% deltaphz = deltaLphz+deltaCphz;
 deltaphz = wrapToPi(deltaLphz+deltaCphz);
         % error(ii,:) = unwrap(abs(deltaphz(:)-phz(ii)));
         tmperror= abs(unwrap(deltaphz(:)-phz(ii)));
@@ -197,12 +210,18 @@ deltaphz = wrapToPi(deltaLphz+deltaCphz);
 
         % error(ii,:) = tmperror;
         % [~,minIx] = min(abs(deltaphz(:)-phz(ii)));
-        [~,minIx] = min(tmperror);
-        deltaLWC(ii) = lwc(minIx).*100;
-        pmPermOut(ii) = pmPerm(minIx);
+        if all(isnan(tmperror))
+            deltaLWC(ii) = NaN;
+            pmPermOut(ii) = NaN;
+        else
+            [~,minIx] = min(tmperror);
+            deltaLWC(ii) = lwc(minIx).*100;
+            pmPermOut(ii) = pmPerm(minIx);
+        end
     end
 end
 deltaLWC(incNaNix) = NaN;
+pmPermOut(incNaNix) = NaN;
 toc
 
 %% Create Figures
