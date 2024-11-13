@@ -174,6 +174,8 @@ if poolsize == 0
     end
 else
     parfor (ii = 1:numel(phz),poolsize)
+    % for ii = 1:numel(phz)
+        % lwc = 0.0001:0.0001:.05;
         pmV = WetCrimVRMS(density(ii),lwc);
         pmPerm = (c./pmV).^2;
         pmindex = sqrt(pmPerm);
@@ -181,7 +183,9 @@ else
         l1 = depth(ii)./cosd(theta2am(ii));
         l2 = depth(ii)./cosd(theta2pm);
         deltaL = 2.*(l2-l1);
-        deltaT = 2.*((l2./pmV)-(l1./amV(ii)));
+        deltaT = -2.*((l2./pmV)-(l1./amV(ii)));
+        % [~,minDeltaTix] = min(deltaT);
+
         % Zach's Correction
         % deltaL = 2.*depth(ii).*());
         % % deltaL = depth(ii).*(1./sind(theta2pm)-1./sind(theta2am(ii)));
@@ -195,15 +199,17 @@ else
         % % deltaphz = deltaLphz+deltaCphz;
         % deltaphz = wrapToPi(deltaLphz+deltaCphz);
         % UnWrapped
-deltaLphz = (2.*pi.*(deltaL./lambda));
+deltaLphz = 2.*pi.*(deltaL./lambda);
 % deltaCphz = (-2.*pi.*f.*(deltaL.*(1./pmV-1./amV(ii))));
 % Zach's Correction (deltaL + L) / deltaV
 % deltaCphz = (-2.*pi.*f.*((deltaL+(depth(ii)./cosd(theta2am(ii)))).*(1./pmV-1./amV(ii))));
 % Tate's Correct Correction
-deltaCphz = -2.*pi.*f.*deltaT;
+deltaCphz = 2.*pi.*f.*deltaT;
 
 % deltaphz = deltaLphz+deltaCphz;
 deltaphz = wrapToPi(deltaLphz+deltaCphz);
+% Constrain to Increasing Travel-Times only;
+% deltaphz = deltaphz(1:minDeltaTix);
         % error(ii,:) = unwrap(abs(deltaphz(:)-phz(ii)));
         tmperror= abs(unwrap(deltaphz(:)-phz(ii)));
                 % tmperror= abs((deltaphz(:)-phz(ii)));
@@ -248,7 +254,7 @@ imagesc(utmXphz(1,:)./1000,(utmYphz(:,1))./1000,deltaLWC);daspect([1,1,1]);color
 ylabel(hc,'\Delta LWC (%)','fontname','serif','fontweight','bold','fontsize',12)
 xlabel('Easting (km)');ylabel('Northing (km)');
 % clim([quantile(deltaLWC(deltaLWC>0),[0.05,0.95])])
-clim([0 .5])
+clim([0 .25])
 set(gca,'YDir','normal','fontname','serif','fontweight','bold','fontsize',12)
 title('Mores Creek Summit: 03/19/24')
 % LWC
