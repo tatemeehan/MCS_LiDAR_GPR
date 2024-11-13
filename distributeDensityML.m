@@ -1,6 +1,6 @@
 %% snowMachine - Supervised Machine Learning to Distribute Snow Density 
 clear; close all; clc;
-cmap = csvread('./colormaps/RdYlBu.csv');
+cmap = csvread('RdYlBu.csv');
 cmap = flipud(cmap);
 %% Options
 isWriteLiDARmat = 0;
